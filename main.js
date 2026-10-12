@@ -23,7 +23,7 @@
   /* Запасной размер сборки на случай, когда страницу открыли с диска,
      а fetch() по file:// не работает. Складывается при сборке из пяти
      файлов: index.html, styles.css, content.js, games.js, main.js. */
-  var FALLBACK_SIZE = 136;
+  var FALLBACK_SIZE = 142;
 
   var DICT = window.CONTENT;
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -297,7 +297,11 @@
       if (!vp) return;
 
       vp.addEventListener("pointerdown", function (e) {
-        if (e.target.closest("button, a")) return;
+        /* Канвас — это игровая поверхность. Если карусель перехватит жест,
+           начатый на нём, фигура перестанет двигаться: события уйдут в
+           #viewport вместе с setPointerCapture. Поэтому жест карусели
+           начинается только вне сцены — по карточке, стрелкам или точкам. */
+        if (e.target.closest("canvas, button, a")) return;
         self.dragging = true;
         self.axis = null;
         self.dx = 0;

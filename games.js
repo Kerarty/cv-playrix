@@ -502,17 +502,41 @@
       return r < 0.42 ? 0 : r < 0.74 ? 1 : r < 0.92 ? 2 : 3;
     }
 
-    function fill() {
-      for (var r = 0; r < ROWS; r++) {
-        grid[r] = [];
-        for (var c = 0; c < COLS; c++) grid[r][c] = null;
+    /* Уровень, который не закроет тройку ни слева, ни сверху. Так поле
+       гарантированно собирается без единой готовой комбинации: игрок не
+       видит на экране результат, которого не добивался. */
+    function safeTier(c, r) {
+      var banned = {};
+      if (c >= 2 && grid[r][c - 1] && grid[r][c - 2] && grid[r][c - 1].tier === grid[r][c - 2].tier) {
+        banned[grid[r][c - 1].tier] = 1;
       }
-      /* Поле заполняется каскадом: верхний ряд стартует выше всех и падает
-         последним. На первой секунде страница уже движется — это тот самый
-         хук, ради которого игра стартует сама. */
+      if (r >= 2 && grid[r - 1][c] && grid[r - 2][c] && grid[r - 1][c].tier === grid[r - 2][c].tier) {
+        banned[grid[r - 1][c].tier] = 1;
+      }
+      var pool = [];
+      for (var t = 0; t < 4; t++) if (!banned[t]) pool.push(t);
+      return pool.length ? pick(pool) : 0;
+    }
+
+    /* Поле должно быть чистым на первой секунде: иначе игрок видит готовую
+       сборку, не сделав ход, и не понимает, что произошло. Поэтому
+       переборяем раскладку, пока есть хоть один возможный ход. */
+    function fill() {
+      var attempt;
+      for (attempt = 0; attempt < 60; attempt++) {
+        lay();
+        if (hasMoves()) return;
+      }
+    }
+
+    function lay() {
+      for (var r = 0; r < ROWS; r++) grid[r] = [];
+      /* Каскадом: верхний ряд стартует выше всех и падает последним.
+         На первой секунде страница уже движется — это тот самый хук,
+         ради которого игра стартует сама. */
       for (var r2 = 0; r2 < ROWS; r2++) {
         for (var c2 = 0; c2 < COLS; c2++) {
-          var g = newGem(randomTier(), false);
+          var g = newGem(safeTier(c2, r2), false);
           g.r = r2;
           g.c = c2;
           g.pr = -0.4 - (ROWS - r2) * 0.38;
@@ -590,11 +614,17 @@
 
     /* ---- ход: обмен, проверка, откат при неудаче ---- */
 
+    /* Координаты читаются в locals ДО правки. Если читать a.r прямо в
+       третьей строке, к этому моменту он уже равен b.r — и обратный обмен
+       в trialScore() перестаёт быть обратным. Через пару проб поле
+       разъезжается: у фигур одни координаты, у клеток другие. */
     function swap(a, b) {
-      var ra = grid[a.r][a.c], rb = grid[b.r][b.c];
-      grid[a.r][a.c] = rb; grid[b.r][b.c] = ra;
-      if (ra) { ra.r = b.r; ra.c = b.c; }
-      if (rb) { rb.r = a.r; rb.c = a.c; }
+      var ar = a.r, ac = a.c, br = b.r, bc = b.c;
+      var ra = grid[ar][ac], rb = grid[br][bc];
+      grid[ar][ac] = rb;
+      grid[br][bc] = ra;
+      if (ra) { ra.r = br; ra.c = bc; }
+      if (rb) { rb.r = ar; rb.c = ac; }
     }
 
     function at(c, r) {
@@ -1145,10 +1175,13 @@
       shake = Math.max(0, shake - dt * 3.4);
       floatT = Math.max(0, floatT - dt * 1.4);
 
+      /* Проверяем каждый кадр, а не раз в 0.18 с: при скорости 4.6 рад/с
+         стрелка за этот шаг уезжает за полметра мимо окна, и раунд
+         растягивается на десятки секунд. Проверка кадра ничего не стоит. */
       if (api.autoplay) {
         aiTimer -= dt;
         if (aiTimer <= 0) {
-          aiTimer = 0.18;
+          aiTimer = 0;
           autoTap();
         }
       }
@@ -1283,8 +1316,12 @@
         var k = randInt(0, j), t = order[j]; order[j] = order[k]; order[k] = t;
       }
       /* Первый кирпич всегда сверху слева: страница обязана начинаться
-         с примера, который читается без догадок. */
-      order[0] = 1;
+         с примера, который читается без догадок. Именно ОБМЕН, а не
+         присваивание: order[0] = 1 продублировал бы единицу и убрал
+         другое число — доска встала бы насмерть на пропущенном номере. */
+      var first = order.indexOf(1), swapWith = order[0];
+      order[0] = order[first];
+      order[first] = swapWith;
 
       blocks = [];
       for (var n = 0; n < TOTAL; n++) {
