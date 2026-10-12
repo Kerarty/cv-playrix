@@ -23,7 +23,7 @@
   /* Запасной размер сборки на случай, когда страницу открыли с диска,
      а fetch() по file:// не работает. Складывается при сборке из пяти
      файлов: index.html, styles.css, content.js, games.js, main.js. */
-  var FALLBACK_SIZE = 141;
+  var FALLBACK_SIZE = 145;
 
   var DICT = window.CONTENT;
   var $ = function (sel, root) { return (root || document).querySelector(sel); };

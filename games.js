@@ -481,6 +481,7 @@
     var score = 0, merges = 0, bestTier = 0;
     var shake = 0, flash = 0;
     var sel = null;     // выбранная клетка для тапа-тап-ввода
+    var fx = [];        // дорисовываемые вспышки исчезающих фигур
 
     function newGem(tier, fromAbove) {
       return {
@@ -490,7 +491,8 @@
         pc: 0,
         scale: fromAbove ? 0.6 : 1,
         pop: 0,
-        dying: 0,
+        lift: 0,                   // короткий подъём при ходе
+        drawScale: 1,
         bob: Math.random() * TAU
       };
     }
@@ -687,14 +689,20 @@
         grid[r] = [];
         for (c = 0; c < COLS; c++) {
           var g = all[k++] || newGem(randomTier(), false);
-          g.r = r; g.c = c; g.scale = 0.3; g.dying = 0; g.pop = 0;
+          g.r = r; g.c = c; g.scale = 0.3; g.pop = 0; g.lift = 0;
           grid[r][c] = g;
         }
       }
       api.parts.spawn(ox + cell * COLS / 2, oy + cell * ROWS / 2, "#FFC24B", 22, { speed: 150, life: 0.7 });
     }
 
-    /* ---- разрешение цепочки: слияние, падение, добирание ---- */
+    /* ---- разрешение цепочки: вспышка, падение, добирание ---- */
+
+    /* Фигура не исчезает вместе с клеткой. Сначала она вспыхивает и
+       сжимается на месте, и только потом доска сдвигается. Если убрать
+       этот такт, всё выглядит как телепортация: игрок тянет фигуру, и она
+       мгновенно пропадает, а на её месте уже другая. */
+    var BURST = 0.19;
 
     function resolve() {
       var gained = 0, steps = 0;
@@ -708,7 +716,7 @@
         }
 
         steps++;
-        var i, r, c;
+        var i;
         for (i = 0; i < groups.length; i++) {
           var grp = groups[i];
           /* Якорь — нижняя центральная клетка группы: слияние происходит
@@ -727,26 +735,25 @@
           for (j = 0; j < grp.gems.length; j++) {
             var gg = grp.gems[j];
             if (gg === anchor) continue;
-            gg.dying = 0.001;
+            /* Уходит из сетки сразу — чтобы логика не цеплялась за него, —
+               но остаётся жить в fx, где дорисовывается до конца вспышки. */
+            fx.push({ gem: gg, x: cellX(gg.pc), y: cellY(gg.pr), t: 0, tier: gg.tier });
             grid[gg.r][gg.c] = null;
-            api.parts.spawn(
-              cellX(gg.c), cellY(gg.pr), TIER_COLOR[gg.tier],
-              7, { speed: 120, life: 0.45, size: 2.6 }
-            );
           }
 
           anchor.tier = tier;
           anchor.pop = 1;
+          anchor.lift = 1;
           api.parts.spawn(cellX(anchor.c), cellY(anchor.pr), TIER_COLOR[tier], 12, { speed: 150, life: 0.5 });
           flash = 1;
         }
 
         merges++;
-        applyGravity();
 
+        /* Падение начинается только после того, как вспышка доиграла. */
         api.tweens.add({
-          from: 0, to: 1, dur: 0.2, delay: 0.14, ease: Ease.linear,
-          onDone: step
+          from: 0, to: 1, dur: BURST, ease: Ease.linear,
+          onDone: function () { applyGravity(); step(); }
         });
       }
 
@@ -802,7 +809,9 @@
 
     function tryMove(a, b) {
       if (!a || !b || !adjacent(a, b)) return false;
-      if (a.dying || b.dying) return false;
+      /* Обе фигуры приподнимаются на момент хода: жест должен читаться
+         как действие, а не как перестановка местами. */
+      a.lift = 1; b.lift = 1;
       swap(a, b);
       if (!findMatches().length) {
         swap(a, b);                       // откат: глазами видно, что фигуры вернулись
@@ -855,6 +864,7 @@
     apiMethods.reset = function () {
       score = 0; merges = 0; shake = 0; flash = 0;
       sel = null; bestTier = 0;
+      fx.length = 0;
       fill();
       api.score(0);
       api.progress(0);
@@ -876,10 +886,34 @@
           } else if (g.scale !== 1) {
             g.scale = approach(g.scale, 1, 12, dt);
           }
+          if (g.lift > 0) g.lift = Math.max(0, g.lift - dt * 4.5);
+
+          /* Итоговый размер собирается из трёх слоёв, чтобы движение
+             читалось: подъём при ходе, хлопок при слиянии и глубина —
+             фигура тем меньше, чем дальше она от своей клетки. */
+          var s = g.scale;
+          if (g.lift > 0) s *= 1 + Math.sin(g.lift * Math.PI) * 0.17;
+          s *= 1 - Math.min(0.2, Math.abs(g.pr - g.r) * 0.14);
+          g.drawScale = s;
+
           g.bob += dt * 1.7;
           /* Лучшая собранная фигура идёт в HUD: видно, что сетка
              работает даже у того, кто не понял правил слияния */
           if (g.tier > bestTier) { bestTier = g.tier; api.stat("best", bestTier + 1); }
+        }
+      }
+
+      /* Вспышки доживают своей такт и уходят. Осколки порождаются здесь,
+         а не в draw(): иначе их количество зависит от частоты кадров,
+         а на слабом телефоне сыпалось бы вдвое больше. */
+      for (var i = fx.length - 1; i >= 0; i--) {
+        fx[i].t += dt;
+        if (fx[i].t >= BURST) { fx.splice(i, 1); continue; }
+        if (!fx[i].sprayed && fx[i].t >= BURST * 0.22) {
+          fx[i].sprayed = 1;
+          api.parts.spawn(fx[i].x, fx[i].y, TIER_COLOR[fx[i].tier], 7, {
+            speed: 120, life: 0.45, size: 2.6
+          });
         }
       }
 
@@ -964,11 +998,9 @@
           var x = cellX(g.pc);
           var y = cellY(g.pr);
           var bobY = reduceMotion ? 0 : Math.sin(g.bob) * cell * 0.018;
-          var s = g.scale;
-          if (g.dying) continue;
-
+          var s = g.drawScale;
           ctx.save();
-          ctx.globalAlpha = s < 1 ? clamp(s, 0, 1) : 1;
+          ctx.globalAlpha = clamp(s, 0, 1);
           ctx.translate(x, y + bobY);
           ctx.scale(s, s);
 
@@ -994,6 +1026,30 @@
 
           ctx.restore();
         }
+      }
+
+      /* Вспышки собравшихся фигур: хлопок и схлопывание на месте.
+         Рисуются поверх доски и живут свой такт — без них фигура
+         исчезает в том же кадре, где из неё собирают новую. */
+      for (var f = 0; f < fx.length; f++) {
+        var e = fx[f];
+        var k = clamp(e.t / BURST, 0, 1);
+        /* Сначала распухает, потом сжимается в ноль — так глаз успевает
+           заметить, ЧТО исчезло, а не только что клетка стала пустой */
+        var grow = k < 0.3 ? 1 + (k / 0.3) * 0.34 : (1 + 0.34) * (1 - (k - 0.3) / 0.7);
+        ctx.save();
+        ctx.globalAlpha = clamp(1 - k * k, 0, 1);
+        ctx.translate(e.x, e.y);
+        ctx.scale(grow, grow);
+        ctx.shadowColor = TIER_DARK[e.tier];
+        ctx.shadowBlur = rad * 1.1 * (1 - k);
+        gemPath(ctx, e.tier, 0, 0, rad);
+        var eg = ctx.createLinearGradient(0, -rad, 0, rad);
+        eg.addColorStop(0, "#FFFFFF");
+        eg.addColorStop(1, TIER_COLOR[e.tier]);
+        ctx.fillStyle = eg;
+        ctx.fill();
+        ctx.restore();
       }
 
       /* Выбранная клетка */
