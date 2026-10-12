@@ -35,6 +35,19 @@
     return cur + (target - cur) * (1 - Math.exp(-rate * dt));
   }
 
+  /* Движение с постоянной скоростью, заданной в клетках в секунду.
+
+     Экспоненциальное приближение для этого не годится: у него одна
+     скорость на все расстояния, поэтому сдвиг на клетку и падение с шести
+     клеток выглядят одинаково быстро — и длинное падение читается как
+     телепортация. Здесь одна клетка всегда занимает одно и то же время. */
+  function glide(cur, target, cellsPerSec, dt) {
+    var d = target - cur;
+    var max = cellsPerSec * dt;
+    if (Math.abs(d) <= max) return target;
+    return cur + (d > 0 ? max : -max);
+  }
+
   function randInt(a, b) { return a + ((Math.random() * (b - a + 1)) | 0); }
 
   function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
@@ -483,6 +496,10 @@
     var sel = null;     // выбранная клетка для тапа-тап-ввода
     var fx = [];        // дорисовываемые вспышки исчезающих фигур
 
+    /* Одна клетка проходится примерно за 0.15 с. Сдвиг остаётся отзывчивым,
+       а падение на шесть клеток читается как падение, а не как прыжок. */
+    var CELL_SPEED = 6.6;
+
     function newGem(tier, fromAbove) {
       return {
         tier: tier,
@@ -492,6 +509,8 @@
         scale: fromAbove ? 0.6 : 1,
         pop: 0,
         lift: 0,                   // короткий подъём при ходе
+        land: 0,                   // сжатие при приземлении
+        wasMoving: true,
         drawScale: 1,
         bob: Math.random() * TAU
       };
@@ -689,7 +708,13 @@
         grid[r] = [];
         for (c = 0; c < COLS; c++) {
           var g = all[k++] || newGem(randomTier(), false);
-          g.r = r; g.c = c; g.scale = 0.3; g.pop = 0; g.lift = 0;
+          g.r = r; g.c = c; g.scale = 0.4; g.pop = 0; g.lift = 0; g.land = 0;
+          /* После перемешивания фигуры не меняются местами мгновенно:
+             каждая приходит сверху и падает на своё место. Иначе поле
+             дёргается целиком и выглядит перемоткой. */
+          g.pr = -0.7 - (ROWS - r) * 0.55;
+          g.pc = c;
+          g.wasMoving = true;
           grid[r][c] = g;
         }
       }
@@ -877,9 +902,19 @@
         for (c = 0; c < COLS; c++) {
           var g = grid[r][c];
           if (!g) continue;
-          /* Позиция догоняет логическую сама: и ход, и падение — один код */
-          g.pr = approach(g.pr, g.r, 13, dt);
-          g.pc = approach(g.pc, g.c, 13, dt);
+          /* Позиция догоняет логическую сама: и ход, и падение — один код.
+             Скорость в клетках, а не «доля разницы за кадр»: иначе длинное
+             падение проскакивает мимо клеток и выглядит телепортацией. */
+          g.pr = glide(g.pr, g.r, CELL_SPEED, dt);
+          g.pc = glide(g.pc, g.c, CELL_SPEED, dt);
+
+          /* Приземление: фигура осела — короткое сжатие. Без него
+             остановка выглядит как обрыв движения. */
+          var settled = g.pr === g.r && g.pc === g.c;
+          if (settled && !g.wasMoving) g.land = 1;
+          g.wasMoving = !settled;
+          if (g.land > 0) g.land = Math.max(0, g.land - dt * 5);
+
           if (g.pop > 0) {
             g.pop = Math.max(0, g.pop - dt * 3.4);
             g.scale = 1 + Math.sin(g.pop * Math.PI) * 0.38;
@@ -888,12 +923,13 @@
           }
           if (g.lift > 0) g.lift = Math.max(0, g.lift - dt * 4.5);
 
-          /* Итоговый размер собирается из трёх слоёв, чтобы движение
-             читалось: подъём при ходе, хлопок при слиянии и глубина —
-             фигура тем меньше, чем дальше она от своей клетки. */
+          /* Итоговый размер собирается из слоёв, чтобы движение читалось:
+             подъём при ходе, хлопок при слиянии, приплющивание при
+             посадке и глубина — фигура тем меньше, чем дальше от клетки. */
           var s = g.scale;
           if (g.lift > 0) s *= 1 + Math.sin(g.lift * Math.PI) * 0.17;
-          s *= 1 - Math.min(0.2, Math.abs(g.pr - g.r) * 0.14);
+          if (g.land > 0) s *= 1 - Math.sin(g.land * Math.PI) * 0.13;
+          s *= 1 - Math.min(0.26, Math.abs(g.pr - g.r) * 0.15);
           g.drawScale = s;
 
           g.bob += dt * 1.7;
