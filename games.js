@@ -1494,6 +1494,15 @@
     order: { factory: Order, name: "order" }
   };
 
+  /* Реально ли элемент попал в экран. Проверка обычная и детерминированная:
+     IntersectionObserver может не сработать в фоновой вкладке, и тогда
+     страница загрузилась бы вообще без анимации. */
+  function inView(el) {
+    var r = el.getBoundingClientRect();
+    var vw = global.innerWidth || 0, vh = global.innerHeight || 0;
+    return r.right > 0 && r.left < vw && r.bottom > 0 && r.top < vh;
+  }
+
   function createStage(canvas, kind, handlers) {
     if (!REGISTRY[kind]) throw new Error("Нет такой механики: " + kind);
     var stage = new Stage(canvas, REGISTRY[kind].factory);
@@ -1507,7 +1516,12 @@
     /* Стартовые числа уходят только теперь: до подписки они были бы
        отброшены, и HUD остался бы с нулями из разметки. */
     if (stage.game && stage.game.reset) stage.game.reset();
-    stage.play();
+
+    /* Крутим цикл только у того, что реально видно. Соседние слайды
+       карусели один раз отрисованы статикой — чтобы при свайпе не было
+       пустого кадра, — но свой цикл они не занимают. */
+    if (inView(canvas)) stage.play();
+
     return stage;
   }
 

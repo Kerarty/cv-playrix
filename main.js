@@ -206,11 +206,13 @@
   }
 
   /* Время до первого кадра: от старта навигации до момента, когда первая
-     сцена реально отрисовалась, а не когда пришёл ответ сервера. */
+     сцена реально отрисовалась, а не когда пришёл ответ сервера.
+     Верхняя граница generous: на холодном CDN первая загрузка идёт долго,
+     и обрезанное число хуже, чем честные десять секунд. */
   function measureTTF() {
     if (!performance || !performance.now) return;
     var t = Math.round(performance.now());
-    if (t > 0 && t < 5000) MEASURED.ttf = t;
+    if (t > 0 && t < 20000) MEASURED.ttf = t;
   }
 
   /* Размер: складываем реальные файлы. На file:// fetch не пройдёт —
@@ -357,6 +359,12 @@
       this.slides.forEach(function (s, k) { s.classList.toggle("active", k === next); });
       this.syncDots();
 
+      /* Активный слайд запускаем сами: на него смотрят прямо сейчас, и
+         ждать, пока сработает наблюдатель видимости, незачем. Останавливать
+         ушедшие по-прежнему будет IntersectionObserver. */
+      var active = stages.filter(function (s) { return s.slide === this.slides[next]; }, this)[0];
+      if (active) active.stage.play();
+
       var prev = $("#prevBtn"), after = $("#nextBtn");
       if (prev) prev.disabled = next === 0;
       if (after) after.disabled = next === n - 1;
@@ -496,14 +504,20 @@
     initPrint();
     initLang();
     measureSize();
+
     /* Замер ставится после отрисовки первого кадра: перерисовываем список
-       только когда число уже известно, иначе в разметке останется прочерк. */
-    requestAnimationFrame(function () {
-      requestAnimationFrame(function () {
-        measureTTF();
-        renderLists();
-      });
-    });
+       только когда число уже известно, иначе в разметке останется прочерк.
+       Вторая попытка по таймеру — в фоновой вкладке кадров не бывает, и без
+       неё метрика так и не появилась бы. */
+    var measured = false;
+    function publish() {
+      if (measured) return;
+      measured = true;
+      measureTTF();
+      renderLists();
+    }
+    requestAnimationFrame(function () { requestAnimationFrame(publish); });
+    setTimeout(publish, 1500);
 
     document.body.classList.add("ready");
   }
