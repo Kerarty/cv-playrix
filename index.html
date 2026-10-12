@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ярослав Кукар — геймдизайнер плейблов</title>
+<meta name="description" content="Интерактивное резюме на три механики: merge-3, тайминг, порядок. Отклик на вакансию Game Designer — Playables (Intern) в Playrix.">
+<meta name="theme-color" content="#0E0826">
+
+<!-- Превью ссылки в мессенджере. Без него ссылка прилетает серым прямоугольником. -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="Ярослав Кукар — геймдизайнер плейблов">
+<meta property="og:description" content="Резюме, в которое можно сразу поиграть: три механики, разбор каждой и проект за ней.">
+<meta property="og:image" content="assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<a class="skip" href="#cv">Резюме текстом</a>
+
+<!-- ======================================================== шапка -->
+<header class="topbar">
+  <div class="topbar__in">
+    <div class="brand">
+      <span class="brand__name">Ярослав Кукар</span>
+      <span class="brand__role" data-i18n="role">геймдизайнер плейблов</span>
+    </div>
+    <div class="topbar__tools">
+      <a class="chip print-hide" href="#cv" data-i18n="nav.cv">Резюме текстом</a>
+      <button class="chip chip--lang" id="langBtn" type="button"
+              aria-label="Switch language">EN</button>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ======================================================== креатив -->
+<section class="creative" id="creative">
+
+  <div class="hero">
+    <p class="hero__kicker" data-i18n="hero.kicker"></p>
+    <h1 class="hero__title" data-i18n="hero.title"></h1>
+    <p class="hero__sub" data-i18n="hero.sub"></p>
+  </div>
+
+  <div class="carousel">
+    <button class="nav-arrow nav-arrow--prev" id="prevBtn" type="button" aria-label="←">‹</button>
+
+    <div class="carousel__viewport" id="viewport">
+      <div class="carousel__track" id="track">
+
+        <!-- ------------------------------------------- кейс 1: merge -->
+        <article class="slide" data-game="merge" data-case="merge">
+          <div class="stage">
+            <canvas tabindex="0" data-i18n-aria="cases.merge.title"
+                    aria-label="Сетка со слиянием фигур"></canvas>
+            <div class="hud">
+              <div class="hud__pill">
+                <span data-i18n="games.merge.score"></span><b data-hud="score">0</b>
+              </div>
+              <div class="hud__pill">
+                <span data-i18n="games.merge.best"></span><b data-hud="best">1</b>
+              </div>
+            </div>
+            <p class="prompt" data-i18n="games.merge.prompt"></p>
+          </div>
+          <div class="case" data-case="merge">
+            <span class="case__tag" data-i18n="cases.merge.tag"></span>
+            <h3 class="case__title" data-i18n="cases.merge.title"></h3>
+            <p class="case__text" data-i18n="cases.merge.text"></p>
+            <a class="case__link" href="#p1">
+              <span data-i18n="cases.merge.evidence"></span> →
+            </a>
+          </div>
+        </article>
+
+        <!-- ------------------------------------------ кейс 2: timing -->
+        <article class="slide" data-game="timing" data-case="timing">
+          <div class="stage">
+            <canvas tabindex="0" data-i18n-aria="cases.timing.title"
+                    aria-label="Вращающаяся стрелка и зона попадания"></canvas>
+            <div class="hud">
+              <div class="hud__pill">
+                <span data-i18n="games.timing.round"></span><b data-hud="round">0/5</b>
+              </div>
+              <div class="hud__pill">
+                <span data-i18n="games.timing.score"></span><b data-hud="score">0</b>
+              </div>
+            </div>
+            <p class="prompt" data-i18n="games.timing.prompt"></p>
+          </div>
+          <div class="case" data-case="timing">
+            <span class="case__tag" data-i18n="cases.timing.tag"></span>
+            <h3 class="case__title" data-i18n="cases.timing.title"></h3>
+            <p class="case__text" data-i18n="cases.timing.text"></p>
+            <a class="case__link" href="#p2">
+              <span data-i18n="cases.timing.evidence"></span> →
+            </a>
+          </div>
+        </article>
+
+        <!-- ------------------------------------------- кейс 3: order -->
+        <article class="slide" data-game="order" data-case="order">
+          <div class="stage">
+            <canvas tabindex="0" data-i18n-aria="cases.order.title"
+                    aria-label="Стена из кирпичей с номерами"></canvas>
+            <div class="hud">
+              <div class="hud__pill">
+                <span data-i18n="games.order.step"></span><b data-hud="step">0/12</b>
+              </div>
+              <div class="hud__pill">
+                <span data-i18n="games.order.score"></span><b data-hud="score">0</b>
+              </div>
+            </div>
+            <p class="prompt" data-i18n="games.order.prompt"></p>
+          </div>
+          <div class="case" data-case="order">
+            <span class="case__tag" data-i18n="cases.order.tag"></span>
+            <h3 class="case__title" data-i18n="cases.order.title"></h3>
+            <p class="case__text" data-i18n="cases.order.text"></p>
+            <a class="case__link" href="#p3">
+              <span data-i18n="cases.order.evidence"></span> →
+            </a>
+          </div>
+        </article>
+
+      </div>
+    </div>
+
+    <div class="dots" id="dots" role="tablist" aria-label="Кейсы"></div>
+
+    <button class="nav-arrow nav-arrow--next" id="nextBtn" type="button" aria-label="→">›</button>
+  </div>
+
+  <!-- Показывается, когда креатив отработал: это и есть конверсия -->
+  <div class="install" id="install">
+    <h2 class="install__title" data-i18n="install.title"></h2>
+    <p class="install__text" data-i18n="install.text"></p>
+    <div class="install__row">
+      <a class="btn" href="https://t.me/Kerarty" data-i18n="install.primary"></a>
+      <a class="btn btn--ghost" href="assets/resume.pdf" data-i18n="install.secondary"></a>
+    </div>
+    <p class="install__hint" data-i18n="install.again"></p>
+  </div>
+
+</section>
+
+<!-- ========================================================= документ -->
+<div class="doc" id="cv">
+
+  <!-- ------------------------------------------------------- о себе -->
+  <section class="section" id="about">
+    <div class="section__head">
+      <span class="section__num">01</span>
+      <h2 class="section__title" data-i18n="about.heading"></h2>
+      <span class="rule"></span>
+    </div>
+    <p class="lead" data-i18n="about.lead"></p>
+    <p class="body" data-i18n="about.body"></p>
+  </section>
+
+  <!-- ----------------------------------------------------- проекты -->
+  <section class="section" id="projects">
+    <div class="section__head">
+      <span class="section__num">02</span>
+      <h2 class="section__title" data-i18n="projects.heading"></h2>
+      <span class="rule"></span>
+    </div>
+
+    <article class="card" id="p1">
+      <div class="card__top">
+        <span class="card__n">01</span>
+        <h3 class="card__title" data-i18n="projects.items.0.title"></h3>
+      </div>
+      <p class="card__kind" data-i18n="projects.items.0.kind"></p>
+      <p class="card__text" data-i18n="projects.items.0.text"></p>
+      <ul class="facts" data-facts="0"></ul>
+    </article>
+
+    <article class="card" id="p2">
+      <div class="card__top">
+        <span class="card__n">02</span>
+        <h3 class="card__title" data-i18n="projects.items.1.title"></h3>
+      </div>
+      <p class="card__kind" data-i18n="projects.items.1.kind"></p>
+      <p class="card__text" data-i18n="projects.items.1.text"></p>
+      <ul class="facts" data-facts="1"></ul>
+    </article>
+
+    <article class="card" id="p3">
+      <div class="card__top">
+        <span class="card__n">03</span>
+        <h3 class="card__title" data-i18n="projects.items.2.title"></h3>
+      </div>
+      <p class="card__kind" data-i18n="projects.items.2.kind"></p>
+      <p class="card__text" data-i18n="projects.items.2.text"></p>
+      <ul class="facts" data-facts="2"></ul>
+    </article>
+  </section>
+
+  <!-- ------------------------------------------------------ навыки -->
+  <section class="section" id="skills">
+    <div class="section__head">
+      <span class="section__num">03</span>
+      <h2 class="section__title" data-i18n="skills.heading"></h2>
+      <span class="rule"></span>
+    </div>
+    <div class="skills" id="skillsGrid"></div>
+  </section>
+
+  <!-- ------------------------------------------- как я решаю задачи -->
+  <section class="section" id="decision">
+    <div class="section__head">
+      <span class="section__num">04</span>
+      <h2 class="section__title" data-i18n="decision.heading"></h2>
+      <span class="rule"></span>
+    </div>
+    <p class="lead" data-i18n="decision.lead"></p>
+    <ol class="rules" id="rulesList"></ol>
+    <div class="example">
+      <p class="example__title" data-i18n="decision.exampleTitle"></p>
+      <p class="example__body" data-i18n="decision.exampleBody"></p>
+    </div>
+  </section>
+
+  <!-- -------------------------------------------------- тех. детали -->
+  <section class="section" id="spec">
+    <div class="section__head">
+      <span class="section__num">05</span>
+      <h2 class="section__title" data-i18n="spec.heading"></h2>
+      <span class="rule"></span>
+    </div>
+    <p class="lead" data-i18n="spec.lead"></p>
+
+    <dl class="spec__rows" id="specRows"></dl>
+
+    <p class="section__title" style="font-size:15px" data-i18n="spec.specTitle"></p>
+    <div class="metrics" id="metrics"></div>
+    <p class="note" data-i18n="spec.specNote"></p>
+
+    <div class="next">
+      <p class="next__title" data-i18n="spec.nextTitle"></p>
+      <ul id="nextList"></ul>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------- образование -->
+  <section class="section" id="education">
+    <div class="section__head">
+      <span class="section__num">06</span>
+      <h2 class="section__title" data-i18n="education.heading"></h2>
+      <span class="rule"></span>
+    </div>
+    <dl class="edu">
+      <dt data-i18n="nav.edu"></dt>
+      <dd data-i18n="education.degree"></dd>
+      <dt data-i18n="nav.field"></dt>
+      <dd data-i18n="education.field"></dd>
+      <dt data-i18n="nav.degree"></dt>
+      <dd data-i18n="education.degreeShort"></dd>
+      <dt data-i18n="nav.years"></dt>
+      <dd data-i18n="education.years"></dd>
+    </dl>
+    <div class="langs" id="langs"></div>
+  </section>
+
+  <!-- --------------------------------------------------- контакты -->
+  <section class="section" id="contact">
+    <div class="section__head">
+      <span class="section__num">07</span>
+      <h2 class="section__title" data-i18n="contacts.title"></h2>
+      <span class="rule"></span>
+    </div>
+    <p class="body" data-i18n="contacts.sub"></p>
+    <div class="contacts" id="contactsGrid"></div>
+  </section>
+
+  <footer class="footer">
+    <span data-i18n="footer.note"></span>
+    <div class="footer__actions">
+      <button class="footer__print print-hide" type="button" id="printBtn"
+              data-i18n="footer.print"></button>
+      <a class="footer__link" href="#creative" data-i18n="footer.backToTop"></a>
+    </div>
+  </footer>
+
+</div>
+
+</main>
+
+<!-- Справочные данные для скрипта: правь их здесь, а не в разметке -->
+<script src="content.js"></script>
+<script src="games.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
