@@ -23,7 +23,7 @@
   /* Запасной размер сборки на случай, когда страницу открыли с диска,
      а fetch() по file:// не работает. Складывается при сборке из пяти
      файлов: index.html, styles.css, content.js, games.js, main.js. */
-  var FALLBACK_SIZE = 142;
+  var FALLBACK_SIZE = 141;
 
   var DICT = window.CONTENT;
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -402,15 +402,19 @@
     }
   }
 
-  function revealInstall() {
-    if (installShown) return;
-    installShown = true;
+  /* Экран Install появляется после первого действия игрока. Прокручиваем
+     к нему только когда игра доиграна: после первого касания прыгать
+     вниз нельзя — палец только что был на доске. */
+  function revealInstall(scroll) {
     var box = $("#install");
     if (!box) return;
-    box.classList.add("show");
 
-    /* Прокручиваем только если панель реально за пределами экрана:
-       дёргать вьюпорт без надобности — дурной тон. */
+    if (!installShown) {
+      installShown = true;
+      box.classList.add("show");
+    }
+
+    if (!scroll) return;
     var r = box.getBoundingClientRect();
     if (r.bottom > innerHeight || r.top < 0) {
       box.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -440,11 +444,17 @@
            механики. Наружу отдаём только финальное событие. */
         progress: function () {},
 
-        takeover: function () { if (prompt) prompt.classList.add("hide"); },
+        /* Подсказка живёт, пока человек не начал. И Install открывается
+           тут же: раньше его показывал бот, а теперь посетитель сам
+           доигрывает — ждать пяти раундов ради контактов долго. */
+        firstInput: function () {
+          if (prompt) prompt.classList.add("hide");
+          revealInstall();
+        },
 
         finish: function () {
           slide.classList.add("finished");
-          revealInstall();
+          revealInstall(true);
         }
       });
 

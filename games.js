@@ -1,4 +1,4 @@
-/* ============================================================================
+﻿/* ============================================================================
    games.js — мини-фреймворк и три механики для креатива.
 
    Никаких зависимостей. Всё, что нужно, описано ниже:
@@ -213,9 +213,10 @@
     this.visible = false;
     this.running = false;
     this.time = 0;
-    /* Игра начинает играть сама за себя: первые секунды страницы
-       рекрутер смотрит молча, и аттракт-режим держит экран живым. */
-    this.autoplay = true;
+    /* Игра не играет сама за человека: это креатив, а не витрина.
+       Показывать рекрутеру чужую игру — значит отнимать у него то,
+       зачем он сюда пришёл: самому проверить, что механика цепляет.
+       Движение на первом экране даёт каскад падения фигур, а не бот. */
     this.finished = false;
 
     this.tweens = new Tweens();
@@ -230,8 +231,6 @@
     this.api = {
       get w() { return self.w; },
       get h() { return self.h; },
-      get autoplay() { return self.autoplay; },
-      set autoplay(v) { self.autoplay = v; },
       get finished() { return self.finished; },
       time: function () { return self.time; },
       tweens: this.tweens,
@@ -255,7 +254,7 @@
       stat: function (k, v) { self.stat(k, v); return self; },
       finish: function () { self.finish(); return self; },
       onFinish: function (fn) { self._onFinish = fn; return self; },
-      onTakeover: function (fn) { self._onTakeover = fn; return self; }
+      onFirstInput: function (fn) { self._onFirstInput = fn; return self; }
     };
 
     this.game = factory(this.api);
@@ -284,7 +283,7 @@
       if (self.canvas.setPointerCapture) {
         try { self.canvas.setPointerCapture(e.pointerId); } catch (err) {}
       }
-      self._takeover();
+      self._firstInput();
       self.api.emit("down", p);
       e.preventDefault();
     }, { passive: false });
@@ -318,11 +317,11 @@
       };
       var v = map[e.key];
       if (v) {
-        self._takeover();
+        self._firstInput();
         self.api.emit("move", { dx: v[0], dy: v[1], x: r.width / 2, y: r.height / 2, key: true });
         e.preventDefault();
       } else if (e.key === "Enter" || e.key === " ") {
-        self._takeover();
+        self._firstInput();
         self.api.emit("tap", { x: r.width / 2, y: r.height / 2 });
         self.api.emit("key", e.key);
         e.preventDefault();
@@ -330,13 +329,16 @@
     });
   };
 
-  /* Первое касание — момент, когда зритель становится игроком. */
-  Stage.prototype._takeover = function () {
-    if (!this.autoplay) return;
-    this.autoplay = false;
-    if (this.game && this.game.onTakeover) this.game.onTakeover();
-    if (this._onTakeover) this._onTakeover();
+  /* Первое касание — момент, когда зритель стал игроком. Дальше сцена
+     просто сообщает об этом странице: та подсказка прячет. */
+  Stage.prototype._firstInput = function () {
+    if (this._inputSeen) return;
+    this._inputSeen = true;
+    if (this.game && this.game.onFirstInput) this.game.onFirstInput();
+    if (this._onFirstInput) this._onFirstInput();
   };
+
+  Stage.prototype.onFirstInput = function (fn) { this._onFirstInput = fn; return this; };
 
   Stage.prototype._bindObservers = function () {
     var self = this;
@@ -430,7 +432,7 @@
   Stage.prototype.onProgress = function (fn) { this._onProgress = fn; return this; };
   Stage.prototype.onStat = function (fn) { this._onStat = fn; return this; };
   Stage.prototype.onFinish = function (fn) { this._onFinish = fn; return this; };
-  Stage.prototype.onTakeover = function (fn) { this._onTakeover = fn; return this; };
+  Stage.prototype.onFirstInput = function (fn) { this._onFirstInput = fn; return this; };
 
   Stage.prototype.finish = function () {
     if (this.finished) return;
@@ -440,7 +442,7 @@
 
   Stage.prototype.reset = function () {
     this.finished = false;
-    this.autoplay = true;
+    this._inputSeen = false;
     this.time = 0;
     this.tweens.clear();
     this.parts.clear();
@@ -478,9 +480,7 @@
     var ox = 0, oy = 0; // отступы доска
     var score = 0, merges = 0, bestTier = 0;
     var shake = 0, flash = 0;
-    var aiTimer = 0.6;
     var sel = null;     // выбранная клетка для тапа-тап-ввода
-    var idle = 0;
 
     function newGem(tier, fromAbove) {
       return {
@@ -676,24 +676,6 @@
       return false;
     }
 
-    function bestMove() {
-      var dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-      var best = null, r, c, d;
-      for (r = 0; r < ROWS; r++) {
-        for (c = 0; c < COLS; c++) {
-          for (d = 0; d < dirs.length; d++) {
-            var n = at(c + dirs[d][0], r + dirs[d][1]);
-            if (!n) continue;
-            var a = grid[r][c];
-            if (!a) continue;
-            var t = trialScore(a, n);
-            if (t.score > 0 && (!best || t.score > best.t.score)) best = { a: a, b: n, t: t };
-          }
-        }
-      }
-      return best;
-    }
-
     function reshuffle() {
       var all = [], r, c;
       for (r = 0; r < ROWS; r++) for (c = 0; c < COLS; c++) if (grid[r][c]) all.push(grid[r][c]);
@@ -720,12 +702,7 @@
       function step() {
         var groups = findMatches();
         if (!groups.length) {
-          if (!hasMoves()) {
-            api.tweens.add({
-              from: 0, to: 1, dur: 0.28, ease: Ease.outCubic,
-              onDone: function () { reshuffle(); }
-            });
-          }
+          reshuffleIfDead();
           if (steps) api.progress(Math.min(1, merges / 6));
           return;
         }
@@ -809,6 +786,18 @@
     function cellX(c) { return ox + c * cell + cell / 2; }
     function cellY(r) { return oy + r * cell + cell / 2; }
 
+    /* Поле без ходов — тупик: игрок будет тыкать и ничего не получит.
+       Раньше мёртвую доску выкапывал бот, теперь это делаем сами и сразу
+       после промаха, и после завершения цепочки. */
+    function reshuffleIfDead() {
+      if (hasMoves()) return false;
+      api.tweens.add({
+        from: 0, to: 1, dur: 0.28, ease: Ease.outCubic,
+        onDone: function () { reshuffle(); }
+      });
+      return true;
+    }
+
     /* ---- ввод ---- */
 
     function tryMove(a, b) {
@@ -818,6 +807,7 @@
       if (!findMatches().length) {
         swap(a, b);                       // откат: глазами видно, что фигуры вернулись
         shake = Math.min(shake + 0.5, 1);
+        reshuffleIfDead();
         return false;
       }
       score += 10;
@@ -853,12 +843,6 @@
       sel = null;
     });
 
-    function autoStep() {
-      var mv = bestMove();
-      if (mv) { tryMove(mv.a, mv.b); return; }
-      if (!hasMoves()) reshuffle();
-    }
-
     var apiMethods = {};
 
     apiMethods.resize = function (w, h) {
@@ -870,7 +854,7 @@
 
     apiMethods.reset = function () {
       score = 0; merges = 0; shake = 0; flash = 0;
-      sel = null; aiTimer = 0.6; bestTier = 0;
+      sel = null; bestTier = 0;
       fill();
       api.score(0);
       api.progress(0);
@@ -901,20 +885,6 @@
 
       shake = Math.max(0, shake - dt * 4);
       flash = Math.max(0, flash - dt * 3.2);
-
-      /* Авто-игра: живёт только в режиме ожидания, чтобы страница
-         была живой до первого касания и не мешала игроку. */
-      if (api.autoplay && !api.finished) {
-        idle += dt;
-        aiTimer -= dt;
-        if (aiTimer <= 0 && idle > 0.35) {
-          idle = 0;
-          aiTimer = 0.34 + Math.random() * 0.22;
-          autoStep();
-        }
-      } else {
-        idle = 0;
-      }
     };
 
     function gemPath(ctx, tier, x, y, r) {
@@ -1044,8 +1014,6 @@
       ctx.restore();
     };
 
-    apiMethods.onTakeover = function () { idle = 0; };
-
     /* Сетка заполняется сразу, чтобы первый кадр не был пустым.
        Нули в HUD отдаёт reset() — он вызывается уже после того,
        как страница подписалась на события. */
@@ -1071,7 +1039,6 @@
     var goodHalf = 0.34, perfectHalf = 0.13;
     var targetA = 0, targetSpin = 0;
     var flash = 0, flashColor = "#fff", shake = 0, floatT = 0;
-    var aiTimer = 1.1;
     var trail = [];
     var lastResult = "";
 
@@ -1093,7 +1060,6 @@
       lastResult = "";
       floatT = 0;
       api.stat("round", round);
-      if (api.autoplay) aiTimer = 0.5 + Math.random() * 0.6;
     }
 
     function judge() {
@@ -1126,13 +1092,6 @@
 
     api.on("tap", function () { if (round > 0 && !api.finished) judge(); });
     api.on("key", function (k) { if (k === "Enter" || k === " ") judge(); });
-
-    function autoTap() {
-      /* Играем в идеальное окно: ждём, пока стрелка вот-вот зайдёт в него */
-      var d = arcDist(angle, targetA);
-      var incoming = ((targetA - angle) % TAU + TAU) % TAU < (goodHalf * 2);
-      if (incoming && d < goodHalf * 0.7) judge();
-    }
 
     var m = {};
 
@@ -1174,17 +1133,6 @@
       flash = Math.max(0, flash - dt * 2.6);
       shake = Math.max(0, shake - dt * 3.4);
       floatT = Math.max(0, floatT - dt * 1.4);
-
-      /* Проверяем каждый кадр, а не раз в 0.18 с: при скорости 4.6 рад/с
-         стрелка за этот шаг уезжает за полметра мимо окна, и раунд
-         растягивается на десятки секунд. Проверка кадра ничего не стоит. */
-      if (api.autoplay) {
-        aiTimer -= dt;
-        if (aiTimer <= 0) {
-          aiTimer = 0;
-          autoTap();
-        }
-      }
     };
 
     m.draw = function (ctx, w, h) {
@@ -1383,13 +1331,6 @@
     });
     api.on("key", function (k) { if (k === "Enter" || k === " ") api.emit("tap", { x: api.w / 2, y: api.h / 2 }); });
 
-    var aiTimer = 0.7;
-
-    function autoStep() {
-      var b = find(next);
-      if (b) hit(b);
-    }
-
     var m = {};
 
     m.resize = function (w, h) {
@@ -1408,7 +1349,7 @@
     }
 
     m.reset = function () {
-      next = 1; cheer = 0; aiTimer = 0.7;
+      next = 1; cheer = 0;
       shakeBlock = null; shakeT = 0;
       layout();
       m.resize(api.w || 320, api.h || 420);
@@ -1430,11 +1371,6 @@
       }
       if (shakeT > 0) shakeT = Math.max(0, shakeT - dt * 4);
       cheer = Math.max(0, cheer - dt * 0.8);
-
-      if (api.autoplay && !api.finished) {
-        aiTimer -= dt;
-        if (aiTimer <= 0) { aiTimer = 0.34; autoStep(); }
-      }
     };
 
     m.draw = function (ctx, w, h) {
@@ -1548,7 +1484,7 @@
       if (handlers.progress) stage.onProgress(handlers.progress);
       if (handlers.stat) stage.onStat(handlers.stat);
       if (handlers.finish) stage.onFinish(handlers.finish);
-      if (handlers.takeover) stage.onTakeover(handlers.takeover);
+      if (handlers.firstInput) stage.onFirstInput(handlers.firstInput);
     }
     /* Стартовые числа уходят только теперь: до подписки они были бы
        отброшены, и HUD остался бы с нулями из разметки. */
