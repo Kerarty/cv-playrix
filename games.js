@@ -494,6 +494,7 @@
     var score = 0, merges = 0, bestTier = 0;
     var shake = 0, flash = 0;
     var sel = null;     // выбранная клетка для тапа-тап-ввода
+    var drag = null;    // фигура под пальцем: смещение в пикселях
     var fx = [];        // дорисовываемые вспышки исчезающих фигур
 
     /* Одна клетка проходится примерно за 0.15 с. Сдвиг остаётся отзывчивым,
@@ -830,7 +831,14 @@
       return true;
     }
 
-    /* ---- ввод ---- */
+    /* ---- ввод ----
+
+       Фигура идёт за пальцем один в один. Раньше она стояла в клетке, пока
+       палец не перевалил половину клетки, и только тогда переезжала в
+       соседнюю — палец и фигура шли в разные стороны, и глаз читал это как
+       телепортацию. Теперь палец тянет фигуру с собой, а ход засчитывается
+       в тот момент, когда палец прошёл половину клетки; остаток пути
+       фигура доезжает сама. */
 
     function tryMove(a, b) {
       if (!a || !b || !adjacent(a, b)) return false;
@@ -851,26 +859,78 @@
     }
 
     api.on("down", function (p) {
-      sel = cellAtPoint(p.x, p.y);
+      var here = cellAtPoint(p.x, p.y);
+      sel = here;
+      drag = here ? { c: here.c, r: here.r, dx: 0, dy: 0, axis: null, x0: p.x, y0: p.y } : null;
     });
 
     api.on("move", function (p) {
-      if (!sel) return;
-      var far = Math.max(Math.abs(p.dx), Math.abs(p.dy));
-      if (far < cell * 0.55) return;
-      var dir = Math.abs(p.dx) > Math.abs(p.dy)
-        ? [p.dx > 0 ? 1 : -1, 0]
-        : [0, p.dy > 0 ? 1 : -1];
-      var target = at(sel.c + dir[0], sel.r + dir[1]);
-      var from = at(sel.c, sel.r);
-      tryMove(from, target);
+      /* Стрелка на клавиатуре: ход ровно на клетку, курсор едет следом.
+         Это другой путь, чем палец, — там движение задаёт рука. */
+      if (p.key) {
+        if (!sel) sel = { c: (COLS >> 1), r: ROWS >> 1 };
+        var dir = [p.dx, p.dy];
+        if (tryMove(at(sel.c, sel.r), at(sel.c + dir[0], sel.r + dir[1]))) {
+          sel = { c: sel.c + dir[0], r: sel.r + dir[1] };
+        }
+        return;
+      }
+
+      if (!drag) return;
+
+      var rawX = p.x - drag.x0;
+      var rawY = p.y - drag.y0;
+
+      /* Ось фиксируется на первых же пикселях, иначе диагональный жест
+         дёргает фигуру то вбок, то вниз. */
+      if (!drag.axis && Math.abs(rawX) + Math.abs(rawY) > 3) {
+        drag.axis = Math.abs(rawX) > Math.abs(rawY) * 1.15 ? "x" : "y";
+      }
+      if (!drag.axis) return;
+
+      drag.dx = drag.axis === "x" ? clamp(rawX, -cell, cell) : 0;
+      drag.dy = drag.axis === "y" ? clamp(rawY, -cell, cell) : 0;
+
+      /* Полклетки — порог хода. Дальше жест заканчивается: палец мог бы
+         тащить фигуру через весь ряд, но это уже не свайп, а перетаскивание. */
+      if (Math.abs(drag.dx) < cell * 0.5 && Math.abs(drag.dy) < cell * 0.5) return;
+
+      var dir = drag.axis === "x"
+        ? [drag.dx > 0 ? 1 : -1, 0]
+        : [0, drag.dy > 0 ? 1 : -1];
+      tryMove(at(drag.c, drag.r), at(drag.c + dir[0], drag.r + dir[1]));
+      /* Смещение обнуляем: фигура уже на полпути к новой клетке, ей остаётся
+         доехать полклетки — но это уже не разрыв, а продолжение жеста. */
+      drag = null;
       sel = null;
+    });
+
+    api.on("up", function () {
+      /* Палец отпущен раньше порога — фигура возвращается на место. */
+      if (drag && (drag.dx || drag.dy)) {
+        var held = drag;
+        var fromX = held.dx, fromY = held.dy;
+        drag = { c: held.c, r: held.r, dx: fromX, dy: fromY, axis: held.axis, x0: held.x0, y0: held.y0, back: 1 };
+        api.tweens.add({
+          from: 0, to: 1, dur: 0.13, ease: Ease.outCubic,
+          onUpdate: function (k) {
+            if (drag !== held && !drag) return;
+            drag.dx = fromX * (1 - k);
+            drag.dy = fromY * (1 - k);
+          },
+          onDone: function () { drag = null; }
+        });
+      } else {
+        drag = null;
+      }
     });
 
     api.on("tap", function (p) {
       /* Тап-ввод для клавиатуры и для тех, кто жмёт вместо свайпа */
+      if (drag) return;
       var here = cellAtPoint(p.x, p.y);
       if (!here) return;
+      if (p.key) { sel = here; return; }      // Enter/Space ставит курсор
       if (!sel) { sel = here; return; }
       if (sel === here) { sel = null; return; }
       tryMove(at(sel.c, sel.r), at(here.c, here.r));
@@ -890,6 +950,7 @@
       score = 0; merges = 0; shake = 0; flash = 0;
       sel = null; bestTier = 0;
       fx.length = 0;
+      drag = null;
       fill();
       api.score(0);
       api.progress(0);
@@ -1025,43 +1086,71 @@
         ctx.stroke();
       }
 
-      /* Фигуры */
+      /* Фигуры. Под пальцем — последней и крупнее: её тянут, значит она
+         сейчас выше остальных. */
       var rad = cell * 0.38;
+      var held = drag ? at(drag.c, drag.r) : null;
+
+      function paintGem(g, x, y, s) {
+        ctx.save();
+        ctx.globalAlpha = clamp(s, 0, 1);
+        ctx.translate(x, y);
+        ctx.scale(s, s);
+
+        ctx.save();
+        ctx.shadowColor = TIER_DARK[g.tier];
+        ctx.shadowBlur = rad * 0.7;
+        ctx.shadowOffsetY = rad * 0.16;
+        gemPath(ctx, g.tier, 0, 0, rad);
+        var grad = ctx.createLinearGradient(0, -rad, 0, rad);
+        grad.addColorStop(0, TIER_COLOR[g.tier]);
+        grad.addColorStop(1, TIER_DARK[g.tier]);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+
+        /* Блик сверху слева — дешёвый способ сделать фигуру объёмной */
+        ctx.save();
+        ctx.globalAlpha = 0.5;
+        gemPath(ctx, g.tier, -rad * 0.16, -rad * 0.2, rad * 0.56);
+        ctx.fillStyle = "rgba(255,255,255,0.72)";
+        ctx.fill();
+        ctx.restore();
+
+        ctx.restore();
+      }
+
       for (var rr = 0; rr < ROWS; rr++) {
         for (var cc = 0; cc < COLS; cc++) {
           var g = grid[rr][cc];
-          if (!g) continue;
-          var x = cellX(g.pc);
-          var y = cellY(g.pr);
+          if (!g || g === held) continue;
           var bobY = reduceMotion ? 0 : Math.sin(g.bob) * cell * 0.018;
-          var s = g.drawScale;
-          ctx.save();
-          ctx.globalAlpha = clamp(s, 0, 1);
-          ctx.translate(x, y + bobY);
-          ctx.scale(s, s);
-
-          ctx.save();
-          ctx.shadowColor = TIER_DARK[g.tier];
-          ctx.shadowBlur = rad * 0.7;
-          ctx.shadowOffsetY = rad * 0.16;
-          gemPath(ctx, g.tier, 0, 0, rad);
-          var grad = ctx.createLinearGradient(0, -rad, 0, rad);
-          grad.addColorStop(0, TIER_COLOR[g.tier]);
-          grad.addColorStop(1, TIER_DARK[g.tier]);
-          ctx.fillStyle = grad;
-          ctx.fill();
-          ctx.restore();
-
-          /* Блик сверху слева — дешёвый способ сделать фигуру объёмной */
-          ctx.save();
-          ctx.globalAlpha = 0.5;
-          gemPath(ctx, g.tier, -rad * 0.16, -rad * 0.2, rad * 0.56);
-          ctx.fillStyle = "rgba(255,255,255,0.72)";
-          ctx.fill();
-          ctx.restore();
-
-          ctx.restore();
+          paintGem(g, cellX(g.pc), cellY(g.pr) + bobY, g.drawScale);
         }
+      }
+
+      if (held) {
+        /* Тень под пальцем смещается вместе с фигурой — иначе она выглядит
+           приклеенной к столу, а не взятой рукой. */
+        var lift = Math.min(1, Math.hypot(drag.dx, drag.dy) / cell);
+        ctx.save();
+        ctx.globalAlpha = 0.18 * lift;
+        ctx.fillStyle = "#4A2B18";
+        ctx.beginPath();
+        ctx.ellipse(
+          cellX(held.pc) + drag.dx,
+          cellY(held.pr) + drag.dy + rad * 0.78,
+          rad * (0.9 + lift * 0.2), rad * 0.26, 0, 0, TAU
+        );
+        ctx.fill();
+        ctx.restore();
+
+        paintGem(
+          held,
+          cellX(held.pc) + drag.dx,
+          cellY(held.pr) + drag.dy,
+          held.drawScale * (1 + lift * 0.16)
+        );
       }
 
       /* Вспышки собравшихся фигур: хлопок и схлопывание на месте.
